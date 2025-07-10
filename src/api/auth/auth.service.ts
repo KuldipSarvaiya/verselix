@@ -1,7 +1,8 @@
-import { Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { supabase } from '../../supabase/supabase.service';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UserDetails } from './types/user-details.type';
 
 @Injectable()
 export class AuthService {
@@ -55,6 +56,10 @@ export class AuthService {
         sub: dbUser.id,
         email: dbUser.email,
         role: dbUser.role,
+        firstName: dbUser.firstName,
+        lastName: dbUser.lastName,
+        picture: dbUser.picture,
+        provider: dbUser.provider,
       });
 
       console.log(dbUser);
@@ -64,6 +69,65 @@ export class AuthService {
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException(error.message);
+    }
+  }
+
+  async getCurrentUser(userId: string): Promise<UserDetails> {
+    try {
+      const user: UserDetails | null = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          picture: true,
+          role: true,
+          provider: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      return user;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to retrieve user details');
+    }
+  }
+
+  async promoteToAdmin(userId: string): Promise<{ message: string; requiresReauth: boolean }> {
+    try {
+      // Update user role to ADMIN
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: { role: 'ADMIN' },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+        },
+      });
+
+      if (!updatedUser) {
+        throw new NotFoundException('User not found');
+      }
+
+      return {
+        message: 'Successfully promoted to admin. Please login again to get the updated token with admin privileges.',
+        requiresReauth: true
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to promote user to admin');
     }
   }
 }

@@ -23,4 +23,18 @@ model User {
   provider  String   @default("google")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  files     File[]
+}
+
+model File {
+  id           String   @id @default(cuid())
+  userId       String
+  originalName String
+  mimeType     String
+  size         Int
+  uploadTime   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
